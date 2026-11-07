@@ -1,12 +1,24 @@
+<div align="center">
+
 # NOVA
 
-**Triagem automática de e-mails de suporte em Python: descobre qual cliente está escrevendo e monta o chamado para o ERP.**
+**Sua caixa de suporte triada antes de alguém abrir.**
+
+A NOVA lê cada e-mail que chega ao suporte, descobre qual cliente escreveu (pelo endereço,
+pelo CNPJ/CPF ou pelo nome da empresa) e monta o chamado para o ERP.
 
 [![tests](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml/badge.svg)](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) · **Português**
+
+[Exemplo](#exemplo) · [Decisões de projeto](#decisões-de-projeto) · [Como rodar](#como-rodar) · [Documentação](#documentação)
+
+</div>
 
 ## O problema
 
