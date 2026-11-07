@@ -1,220 +1,157 @@
-# NOVA — triagem automática de e-mails de suporte
+# NOVA
+
+**Automated support-email triage in Python: works out which customer is writing and drafts the ticket for the ERP.**
 
 [![tests](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml/badge.svg)](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-NOVA é uma "secretária virtual" em Python que lê a caixa de e-mail do suporte, identifica **qual cliente
-está escrevendo** (pelo e-mail, pelo CNPJ/CPF citado ou pelo nome da empresa) e monta um
-**pré-atendimento** pronto para ser cadastrado como chamado em um sistema ERP. Quando falta
-informação, ela mesma responde ao cliente pedindo o CNPJ/CPF, confere os dígitos e avisa a equipe
-quando algo precisa de uma pessoa.
+**English** · [Português](README.pt-BR.md)
 
-> **Todos os dados deste repositório são fictícios.** Clientes, CNPJs, nomes e endereços de e-mail
-> existem apenas para os testes e os exemplos. Os CNPJs/CPFs de exemplo passam na validação dos
-> dígitos verificadores, mas não correspondem a cadastros reais usados pelo projeto.
+## The problem
 
-## Sobre a base de clientes
+In a B2B support inbox, someone has to read every email and work out **which customer sent it**,
+which is often unclear: a personal Gmail address, a signature that only says the company name,
+a colleague writing for the first time. Then they reply asking for the company's tax ID (CNPJ/CPF in
+Brazil), wait, check it, and finally type the ticket into the ERP. It is slow, repetitive and error-prone.
 
-Em uso real, a base de clientes fica no **ERP**: é lá que a NOVA deve consultar se um CNPJ/CPF é
-cliente e onde o chamado é aberto. Para o projeto rodar sem nenhum ERP, a base é simulada por
-**arquivos de texto** em `data/`, editáveis no Bloco de Notas:
+## What NOVA does
 
-| Arquivo | O que é | Formato |
-|---|---|---|
-| `data/clientes.txt` | clientes cadastrados (substitui a consulta ao ERP) | `CNPJ_ou_CPF;Nome;contatos_opcionais;apelidos_opcionais` |
-| `data/grupos.txt` | pessoas que, no De ou no Cc, mandam o e-mail direto para um cliente | `CNPJ;email1,email2,@dominio` |
-| `data/bloqueados.txt` | remetentes/domínios que a NOVA nunca responde | um por linha |
+NOVA watches the inbox and handles that triage on its own. For each new email it:
 
-Os arquivos são relidos automaticamente quando você salva (cache por data de modificação), sem reiniciar.
-Para integrar um ERP de verdade, só `find_customer()` em `app/customers/service.py` precisa mudar
-(veja [Integração com um ERP](#integração-com-um-erp)).
-
-## Como funciona
-
-```
-e-mail chega ─► filtros ─► identifica o cliente ─────────────► pré-atendimento salvo + confirmação ao cliente
-                  │          1. regra de grupo (De/Cc)              (Cliente, Contato, Tipo, Canal,
-                  │          2. e-mail/domínio já vinculado          Tipo de Acesso, Observações)
-                  │          3. CNPJ/CPF no texto (valida dígitos)
-                  │          4. nome da empresa na assinatura  ──► marcado [CONFIRMAR CLIENTE]
-                  │          5. não achou ──► pede o CNPJ/CPF (até N vezes) ──► escala para a equipe
-                  │
-                  └─► ignora: noreply, respostas automáticas, duplicados, assuntos/remetentes
-                      bloqueados, e-mails da própria equipe, conversas anteriores ao go-live
+```mermaid
+flowchart LR
+    A[New email] --> B{Who is it?}
+    B -->|known sender| D[Pre-ticket<br/>+ confirmation]
+    B -->|valid CNPJ/CPF in the text| D
+    B -->|company name in the signature| E[Pre-ticket flagged<br/>for confirmation]
+    B -->|unknown| C[Asks for the CNPJ/CPF]
+    C -->|customer replies| B
+    C -->|no valid answer| F[Hands over to the team]
 ```
 
-Principais recursos:
+1. **Filters** what it should never answer: no-reply senders, auto-replies, duplicates, the team's own
+   emails, and conversations that started before it went live.
+2. **Identifies the customer**, in order: a group rule (From/Cc), a sender already linked to a customer,
+   a valid CNPJ/CPF in the text (check digits verified), or the company name in the signature.
+3. **Asks for the tax ID** when it can't tell, explaining exactly what was wrong if the customer sends an
+   invalid number, and escalates to the team after a limit or 48h of silence.
+4. **Builds the pre-ticket** (customer, contact, type, channel, notes), joining the original request and
+   the follow-up into one record, ready to be opened in the ERP.
 
-- **Leitura por data**, nunca por "não lido": um corte (`PROCESS_FROM` ou `--go-live`) garante que
-  a NOVA nunca responde ao histórico da caixa.
-- **Validação de CNPJ/CPF** (dígitos verificadores, quantidade de dígitos, CNPJ alfanumérico) sem
-  confundir telefone, data ou protocolo com documento.
-- **Vínculo contato ↔ cliente:** depois de validado uma vez, o mesmo endereço não precisa informar o
-  CNPJ de novo. Domínios inteiros só quando cadastrados explicitamente; provedores públicos
-  (Gmail, Outlook...) nunca são vinculados por domínio.
-- **Identificação pelo nome** citado na assinatura, com regras contra falso positivo (nome mais
-  específico vence, empate = pede o CNPJ, palavras genéricas não contam).
-- **Conversas:** mensagens seguintes de um atendimento já validado não geram novo chamado; se alguém
-  da equipe responde, a NOVA sai da conversa; cabeçalho `References` acumulado para o Gmail não
-  quebrar a thread.
-- **Robustez:** retry automático de falhas de envio, escalonamento por tempo sem resposta
-  (`STALE_WAITING_HOURS`), pré-atendimento idempotente e datas sempre em UTC.
-- **Três modos de e-mail:** simulador (`console`), IMAP/SMTP (Gmail, grátis) e Microsoft Graph
-  (Microsoft 365), cada um com uma variante `*_readonly` que só registra o que seria respondido.
+## Example
 
-## Começando
+```text
+From:    João Pereira <joao@alpha.com>
+Subject: Internet fora do ar
+         Bom dia, estamos sem internet desde as 14h.
+```
 
-Requisitos: Python 3.10+ (ou Docker).
+NOVA doesn't know this sender yet, so it asks for the CNPJ or CPF. The customer replies
+`CNPJ: 12.345.678/0001-95`, NOVA validates it and confirms:
+
+```text
+Confirmamos o seu cadastro: Empresa Alpha LTDA (12.345.678/0001-95). Estamos providenciando o
+atendimento à sua solicitação e em breve um de nossos colaboradores dará continuidade a ela.
+```
+
+> *"We have confirmed your registration: Empresa Alpha LTDA. We are arranging your request and one of
+> our staff will follow up shortly."* NOVA was built for Brazilian companies, so it talks to customers
+> in Portuguese.
+
+The pre-ticket it saves:
+
+```json
+{
+  "cliente": "Empresa Alpha LTDA",
+  "cliente_documento": "12345678000195",
+  "contato_nome": "João Pereira",
+  "contato_email": "joao@alpha.com",
+  "tipo_atendimento": "Suporte Técnico",
+  "canal": "E-mail",
+  "observacoes": "Assunto: Internet fora do ar\nBom dia, estamos sem internet desde as 14h.\n\nAssunto: RE: Internet fora do ar\nCNPJ: 12.345.678/0001-95"
+}
+```
+
+Next time `joao@alpha.com` writes, NOVA recognizes him right away and doesn't ask again.
+
+## Design decisions
+
+The interesting part of this project is less the happy path than the cases that would go wrong:
+
+- **Read by date, never by "unread".** In a shared inbox, people open emails before NOVA gets to them.
+  NOVA processes everything after a cutoff (`--go-live`) and de-duplicates by `Message-ID`.
+- **A company name is a hint, not proof.** Anyone can type a company name in a signature, so a match by
+  name creates a pre-ticket flagged `[CONFIRMAR CLIENTE]` and never links the sender's address.
+  Two customers with equally specific names count as ambiguous: NOVA asks instead of guessing.
+- **Never link a public email domain.** Linking `@gmail.com` to one customer would turn every Gmail
+  user into that customer. Only the exact address is learned; whole domains only when explicitly
+  registered.
+- **Identity is the `From`, not the `Reply-To`.** A known `Reply-To` must not let an unknown sender skip
+  the tax ID check.
+- **Escalation is not a dead end.** A conversation handed to the team stays open: if the customer
+  replies later with the right CNPJ, NOVA validates it normally instead of ignoring them forever.
+- **Keep the thread intact.** Replies carry the full `References` chain, otherwise Gmail starts a new
+  thread after a few exchanges and NOVA would ask for a CNPJ it already has.
+- **Stay out of old conversations.** A reply to a thread NOVA never saw (possibly already handled by a
+  person) is ignored, and so is any conversation a team member joins.
+
+Each of these has regression tests. See [`CHANGELOG.md`](CHANGELOG.md) for the full feature list.
+
+## Tech stack
+
+Python 3.10+ · FastAPI · SQLAlchemy (SQLite / PostgreSQL) · IMAP/SMTP and Microsoft Graph (MSAL) ·
+pytest (150+ tests) · ruff · GitHub Actions · Docker Compose
+
+## Quick start
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env               # Windows: copy .env.example .env
+cp .env.example .env          # Windows: copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
-O `.env.example` já vem com `ENVIRONMENT=dev`, que liga o simulador. Abra http://localhost:8000/docs
-e use `POST /dev/simulate-email`:
+Open http://localhost:8000/docs and send a fake email with `POST /dev/simulate-email`, e.g.
+`{"from_email": "cliente@empresa.com", "body": "CNPJ: 12.345.678/0001-95"}`. Then check what NOVA
+would reply at `GET /dev/outbox`.
 
-| Cenário | from_email | body |
-|---|---|---|
-| Sem CNPJ (NOVA pede o documento) | cliente@empresa.com | Estamos sem internet |
-| CNPJ cadastrado (valida e vincula o e-mail) | cliente@empresa.com | CNPJ: 12.345.678/0001-95 |
-| Mesmo remetente, conversa nova, sem CNPJ | cliente@empresa.com | Estamos sem telefone (outro `conversation_id`) |
-| CNPJ válido, mas não cadastrado (recusa + avisa a equipe) | cliente@empresa.com | CNPJ: 11.222.333/0001-81 |
-| Identificação pelo nome | qualquer@gmail.com | Ramal mudo.<br>Omega Vila Nova |
-| noreply (ignorado) | noreply@sistema.com | qualquer |
+Or with Docker (API + PostgreSQL): `docker compose up --build`. Tests: `pytest`.
 
-Outras rotas de desenvolvimento: `GET /dev/outbox` (o que a NOVA responderia), `GET /dev/emails`
-(memória/estados), `GET /dev/pre-atendimentos`, `GET /dev/customers`, `GET /dev/links`.
+> **All data in this repository is fictitious.** The sample customers, CNPJs and email addresses exist
+> only for tests and examples.
 
-> ⚠️ As rotas `/dev/*` não têm autenticação e mostram a base de clientes. Elas só existem com
-> `ENVIRONMENT=dev`; o padrão, sem `.env`, é `prod`. Nunca publique um servidor com `ENVIRONMENT=dev`.
+## Documentation
 
-### Com Docker
+| | |
+|---|---|
+| [Configuration](docs/configuration.md) | every `.env` option, the simulated customer base in `data/`, CLI utilities |
+| [Gmail (IMAP/SMTP)](docs/guia-gmail.md) | step-by-step setup with a free Gmail account (Portuguese) |
+| [Microsoft 365](docs/microsoft365.md) | reading and replying through Microsoft Graph |
+| [ERP integration](docs/erp-integration.md) | where to plug a real ERP in |
+| [Privacy (LGPD)](docs/privacy.md) | what personal data NOVA stores and how to handle it |
 
-```bash
-cp .env.example .env
-docker compose up --build                    # API + PostgreSQL em http://localhost:8000
-docker compose --profile worker up --build   # também sobe o worker que lê a caixa de e-mail
-```
+## Project structure
 
-A pasta `data/` é montada no container: editar `data/clientes.txt` vale sem reconstruir a imagem.
-
-### Testes e lint
-
-```bash
-pytest
-ruff check .
-```
-
-Os dois rodam automaticamente no GitHub Actions a cada push (`.github/workflows/tests.yml`).
-
-### Usando uma caixa de e-mail real (Gmail, gratuito)
-
-Passo a passo completo em [`docs/guia-gmail.md`](docs/guia-gmail.md). Resumo:
-
-1. Crie um Gmail só para a NOVA, ative a verificação em duas etapas e gere uma **senha de aplicativo**.
-2. No `.env`: `NOVA_EMAIL`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_MODE=imap_readonly`.
-3. `python -m app.imap_check` — testa a conexão (só lê).
-4. `python -m app.worker --once` — um ciclo: lê, decide e só registra a resposta no log.
-5. `python -m app.worker --go-live` — marca "agora" como início (nada do histórico é respondido).
-6. `MAIL_MODE=imap` quando quiser que ela responda de verdade.
-
-### Microsoft 365 (Graph)
-
-`MAIL_MODE=graph_readonly` / `graph`, com `MICROSOFT_CLIENT_ID` (e `MICROSOFT_CLIENT_SECRET` no modo
-aplicativo) de um app registrado no Entra ID. Teste com `python -m app.graph_check`.
-Os módulos de `app/microsoft/` ainda não foram testados contra uma caixa real.
-
-## Configuração
-
-Tudo é lido do `.env` (veja `.env.example`). As principais opções:
-
-| Variável | Padrão | Para quê |
-|---|---|---|
-| `COMPANY_NAME` | `Sua Empresa` | nome exibido nas mensagens e na assinatura |
-| `ENVIRONMENT` | `prod` | `dev` liga as rotas `/dev/*` (só localmente) |
-| `MAIL_MODE` | `console` | `console`, `imap_readonly`, `imap`, `graph_readonly`, `graph` |
-| `NOVA_EMAIL` / `TEAM_EMAIL` | — | caixa da NOVA / e-mail que recebe os avisos internos |
-| `PROCESS_FROM` | 1ª execução | corte por data (ISO 8601) |
-| `ONLY_SENDERS` | — | piloto: processa só estes remetentes |
-| `TEAM_SENDERS` | — | endereços/@domínios da equipe (a NOVA sai da conversa) |
-| `BLOCKED_SENDERS` / `BLOCKED_SUBJECTS` | — | bloqueios rápidos (vírgula) |
-| `MAX_DOCUMENT_REQUESTS` | `2` | quantas vezes pede o CNPJ/CPF antes de escalar |
-| `STALE_WAITING_HOURS` | `48` | escala se o cliente não responder (0 = desliga) |
-| `CONTACT_LINKS_ENABLED` | `true` | lembrar contatos já validados |
-| `LINK_DOMAIN_AUTO` | `false` | aprender o domínio inteiro (não só o e-mail) |
-| `NAME_MATCH_ENABLED` | `true` | identificar o cliente pelo nome |
-| `IGNORE_UNKNOWN_REPLIES` | `true` | ignorar respostas a conversas anteriores ao go-live |
-| `TICKET_TYPE` / `TICKET_CHANNEL` / `TICKET_ACCESS_TYPE` | `Suporte Técnico` / `E-mail` / `Remoto` | valores fixos de cada pré-atendimento |
-| `DATABASE_URL` | `sqlite:///./nova.db` | banco (SQLite ou `postgresql+psycopg://...`) |
-
-Utilitários de linha de comando:
-
-```bash
-python -m app.manage_customers listar | adicionar "<CNPJ>" "<Nome>" | remover "<CNPJ>"
-python -m app.manage_links     listar | adicionar "<CNPJ>" "<email ou @dominio>" | remover ...
-python -m app.manage_blocklist listar | adicionar "@dominio.com" | remover ...
-```
-
-## Integração com um ERP
-
-O ponto de integração está marcado em `app/processor.py` (`# >>> INTEGRAÇÃO ERP`):
-
-1. **Consulta de clientes:** trocar o corpo de `find_customer()` (`app/customers/service.py`) por uma
-   chamada à API do ERP. O resto do fluxo (vínculos, nomes, grupos) usa essa mesma função.
-2. **Abertura do chamado:** enviar o registro de `PreAtendimento` (`app/database/models.py`) ao ERP e
-   guardar o número do chamado retornado.
-3. **Confirmação ao cliente:** mandar a confirmação só depois que o chamado for criado.
-
-## Privacidade (LGPD)
-
-A NOVA processa dados pessoais: endereço, nome e texto dos e-mails, além do CNPJ/CPF dos clientes.
-Se você for usá-la com e-mails reais:
-
-- **Banco:** o corpo das mensagens, os remetentes, os vínculos contato ↔ cliente e o log de eventos
-  ficam no banco (`DATABASE_URL`). Proteja o acesso a ele e defina por quanto tempo guardar esses dados.
-- **Respostas:** o CPF aparece mascarado nas respostas aos clientes. Clientes reconhecidos pelo e-mail
-  nunca recebem o próprio documento de volta.
-- **Avisos à equipe:** incluem um trecho da mensagem do cliente, então `TEAM_EMAIL` deve ser uma
-  caixa interna.
-- **Acesso:** as rotas `/dev/*` expõem esses dados e só devem existir em ambiente local (`ENVIRONMENT=dev`).
-- **Base legal:** você é responsável pela base legal do tratamento e pelos direitos dos titulares
-  (acesso, correção e exclusão) no seu ambiente.
-
-## Estrutura
-
-```
+```text
 app/
-  processor.py          fluxo principal (filtros -> identifica cliente -> pré-atendimento)
-  worker.py             laço que lê a caixa (IMAP ou Graph)
-  config.py             configurações (.env)
-  customers/            base de clientes (service), vínculos (contacts), nomes (names), grupos (groups)
-  documents/            extração e validação de CNPJ/CPF
-  email/                parser, templates, envio (SMTP/Graph) e leitura (IMAP/Graph)
-  microsoft/            autenticação MSAL e cliente Graph
-  rules/                noreply, automáticos, bloqueios e estados
-  database/             SQLAlchemy: e-mails, eventos, vínculos, pré-atendimentos
-  api/                  /health e rotas /dev (simulador)
-data/                   base de clientes simulada (arquivos de texto)
-docs/                   guias (ex.: Gmail por IMAP)
-tests/                  testes automatizados (pytest)
-.github/workflows/      CI: ruff + pytest a cada push
-Dockerfile, docker-compose.yml   API/worker + PostgreSQL
+  processor.py     main flow: filters → identify customer → pre-ticket
+  worker.py        loop that reads the inbox (IMAP or Graph)
+  customers/       customer lookup, contact links, name matching, group rules
+  documents/       CNPJ/CPF extraction and validation
+  email/           parsing, message templates, sending and reading
+  rules/           no-reply, auto-replies, blocklists, states
+  database/        SQLAlchemy models and queries
+  api/             /health and the /dev simulator
+data/              simulated customer base (plain text)
+tests/             pytest suite
 ```
 
 ## Roadmap
 
-- Integração real com um ERP (consulta de clientes e abertura de chamados).
-- Migrações de banco com Alembic (hoje as tabelas são criadas na inicialização).
-- Autenticação nas rotas de administração.
-- Classificação do tipo de atendimento a partir do texto do e-mail.
+- Classify the ticket type and urgency from the email text (ML/LLM, with an evaluation set).
+- A real ERP integration through a pluggable customer source.
+- Alembic migrations and authentication for the admin routes.
 
-As novidades de cada versão estão em [`CHANGELOG.md`](CHANGELOG.md).
+## License
 
-## Licença
-
-[MIT](LICENSE).
+[MIT](LICENSE)
