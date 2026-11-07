@@ -1,12 +1,24 @@
+<div align="center">
+
 # NOVA
 
-**Automated support-email triage in Python: works out which customer is writing and drafts the ticket for the ERP.**
+**Your support inbox, triaged before anyone opens it.**
+
+NOVA reads every incoming support email, works out which customer sent it (by address,
+tax ID or company name) and drafts the ticket for your ERP.
 
 [![tests](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml/badge.svg)](https://github.com/AndrewMBarros/nova/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **English** · [Português](README.pt-BR.md)
+
+[Example](#example) · [Design decisions](#design-decisions) · [Quick start](#quick-start) · [Docs](#documentation)
+
+</div>
 
 ## The problem
 
