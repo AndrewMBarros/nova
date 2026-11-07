@@ -1,0 +1,35 @@
+# Base de clientes SIMULADA (todos os dados são fictícios). Em uso real, os clientes ficam no ERP.
+# Formato: CNPJ_ou_CPF;Nome do Cliente
+# Pode ter pontuação ou não - a NOVA normaliza sozinha ao ler.
+# Linhas começando com # são ignoradas. Edite, salve e teste de novo (não precisa reiniciar nada).
+#
+# 3ª coluna OPCIONAL: contatos já conhecidos desse cliente. Um domínio inteiro com @ e/ou e-mails avulsos,
+# separados por vírgula. Quem escrever desses endereços não precisa informar o CNPJ.
+#   12.345.678/0001-95;Empresa Alpha LTDA;@alpha.com
+#   98.765.432/0001-98;Empresa Beta LTDA;@beta.com.br,contador@gmail.com
+# (Não use @gmail.com, @outlook.com etc.: provedores públicos não são vinculados por domínio.)
+# A NOVA aprende automaticamente o e-mail completo após a conferência do CNPJ/CPF.
+# Por padrão, um novo endereço do mesmo domínio ainda precisa informar o CNPJ/CPF.
+# Domínio inteiro só é reconhecido se você cadastrá-lo explicitamente (3ª coluna) ou ativar LINK_DOMAIN_AUTO=true.
+#
+# 4ª coluna OPCIONAL: apelidos/siglas pelos quais o cliente se apresenta no e-mail, separados por vírgula.
+#   12.345.678/0001-95;Empresa Alpha LTDA;;Alpha,Alpha Telecom     (3ª coluna vazia se não houver contatos)
+# Sem CNPJ e sem e-mail conhecido, a NOVA procura o NOME do cadastro (ou apelido) na assinatura/apresentação do
+# e-mail. Se achar UM cliente, abre o pré-atendimento marcado "[CONFIRMAR CLIENTE]"; se achar mais de um, pede o CNPJ.
+#
+# Na integração com um ERP, este arquivo é substituído pela consulta ao ERP (find_customer).
+
+12.345.678/0001-95;Empresa Alpha LTDA
+98.765.432/0001-98;Empresa Beta LTDA
+529.982.247-25;Cliente Gama (CPF)
+11.444.777/0001-61;Empresa Delta Comercio LTDA
+55.566.677/0001-83;Empresa Epsilon Servicos LTDA
+
+# Exemplo fictício - mesmo CNPJ-raiz, uma linha por unidade; o nome citado no e-mail escolhe a unidade
+22.233.344/0001-83;Omega
+22.233.344/0003-45;Omega Pecas & Acessorios
+22.233.344/0002-64;Omega Vila Nova
+22.233.344/0004-26;Omega SÃO JOSÉ
+
+# Grupo Sigma - ver data/grupos.txt
+33.344.455/0001-83;Grupo Sigma;carlos@parceiro-exemplo.com.br

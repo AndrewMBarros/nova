@@ -1,0 +1,6 @@
+# Regra de grupo: e-mail DE ou COM CÓPIA (Cc) para estas pessoas vai direto para o cliente indicado,
+# sem pedir CNPJ/CPF e valendo mais que qualquer outro vínculo.
+# Formato: CNPJ_ou_CPF_do_cliente;endereco1,endereco2,@dominio   (o cliente precisa existir no clientes.txt)
+
+# Exemplo fictício: Grupo Sigma (a empresa parceira, apesar de ser cliente à parte, faz parte do grupo)
+33.344.455/0001-83;carlos@parceiro-exemplo.com.br,bruno.rocha@sigma-exemplo.com.br,paulo.souza@sigma-exemplo.com.br,rafael.costa@sigma-exemplo.com.br

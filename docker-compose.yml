@@ -1,0 +1,50 @@
+# Sobe a API (e, opcionalmente, o worker) com PostgreSQL.
+#   docker compose up --build                    -> API em http://localhost:8000
+#   docker compose --profile worker up --build   -> API + worker lendo a caixa de e-mail
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nova
+      POSTGRES_PASSWORD: nova
+      POSTGRES_DB: nova
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nova -d nova"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://nova:nova@db:5432/nova
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data   # edite data/clientes.txt sem reconstruir a imagem
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    profiles: ["worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://nova:nova@db:5432/nova
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

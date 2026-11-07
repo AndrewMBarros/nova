@@ -1,0 +1,8 @@
+# Remetentes/domínios que a NOVA NUNCA deve responder (além de noreply, que já
+# é tratado fixo no código). Um por linha. Pode ser um e-mail completo ou um
+# @dominio inteiro. Linhas com # são ignoradas. Edite e salve - vale na hora,
+# sem precisar reiniciar nada.
+#
+# Exemplos (descomente e ajuste ao domínio real da empresa):
+# @suaempresa.com.br
+# alertas@sistema-interno.com.br

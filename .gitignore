@@ -1,0 +1,16 @@
+# Configuração local e credenciais
+.env
+.env.*
+!.env.example
+.token_cache.json
+
+# Banco local
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
