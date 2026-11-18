@@ -53,6 +53,10 @@ flowchart LR
 
 ## Exemplo
 
+<p align="center">
+  <img src="docs/demo.gif" alt="A NOVA pede o CNPJ a um remetente desconhecido, valida a resposta e salva o pré-atendimento" width="800">
+</p>
+
 `joao@alpha.com` escreve "Bom dia, estamos sem internet desde as 14h." sem se identificar. A NOVA pede o
 CNPJ ou CPF; ele responde `CNPJ: 12.345.678/0001-95`; a NOVA confere e confirma:
 
