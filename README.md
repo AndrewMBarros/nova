@@ -53,6 +53,10 @@ flowchart LR
 
 ## Example
 
+<p align="center">
+  <img src="docs/demo.gif" alt="NOVA asks an unknown sender for the CNPJ, validates the reply and saves the pre-ticket" width="800">
+</p>
+
 ```text
 From:    João Pereira <joao@alpha.com>
 Subject: Internet fora do ar
